@@ -1,0 +1,11 @@
+services:
+  graphdb:
+    image: ontotext/graphdb:10.6.4
+    container_name: graphrag-graphdb
+    ports:
+      - "7200:7200"
+    volumes:
+      - ./data/graphdb:/opt/graphdb/home
+    restart: unless-stopped
+# After `docker compose up -d`, open http://localhost:7200 and create a repository
+# with ID `graphrag` and ruleset "RDFS-Plus (Optimized)" (populates the implicit graph).

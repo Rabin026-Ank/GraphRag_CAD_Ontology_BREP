@@ -1,0 +1,19 @@
+# secrets
+.env
+*.key
+
+# data & generated artifacts
+data/graphdb/
+data/**/*.step
+data/**/*.stp
+data/**/*.ttl
+*.ttl
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# eval outputs
+eval/runs/
