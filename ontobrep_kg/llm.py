@@ -17,10 +17,11 @@ from openai import OpenAI
 
 from .config import CFG
 
-# Fail fast on a dead local server instead of hanging (connection refused is instant;
-# this caps a hung/slow primary).
-_PRIMARY_TIMEOUT = 20.0
-_FALLBACK_TIMEOUT = 60.0
+# Timeouts. "Thinking" models (Qwen3, Gemini 2.5) reason before answering and can take
+# 40-60s on a big prompt, so the primary timeout must be generous — a truly dead server
+# still fails instantly (connection refused), this only caps a slow/hung one.
+_PRIMARY_TIMEOUT = 150.0
+_FALLBACK_TIMEOUT = 120.0
 
 _primary_client = None
 _fallback_client = None
@@ -63,10 +64,12 @@ def _complete(client: OpenAI, model: str, effort: str, system: str, user: str,
     return resp.choices[0].message.content or ""
 
 
-def chat(system: str, user: str, temperature: float = 0.0, max_tokens: int = 2048) -> str:
+def chat(system: str, user: str, temperature: float = 0.0, max_tokens: int = 4096) -> str:
     """Single-turn completion. Try primary, fall back to secondary if primary fails.
 
-    temperature=0.0 for deterministic SPARQL generation.
+    temperature=0.0 for deterministic SPARQL generation. max_tokens defaults high (4096)
+    because "thinking" models spend ~2000 tokens reasoning BEFORE the answer — too small
+    a budget and the query is empty/truncated (all tokens consumed by thinking).
     """
     global _primary_dead
 
