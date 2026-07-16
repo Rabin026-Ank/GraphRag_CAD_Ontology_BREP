@@ -26,6 +26,7 @@ _FALLBACK_TIMEOUT = 120.0
 _primary_client = None
 _fallback_client = None
 _primary_dead = False   # latched True after the primary first fails this session
+_last_used = "none"     # which backend served the most recent chat() call
 
 
 def _primary() -> OpenAI:
@@ -45,11 +46,16 @@ def _fallback() -> OpenAI:
 
 
 def _complete(client: OpenAI, model: str, effort: str, system: str, user: str,
-              temperature: float, max_tokens: int) -> str:
+              temperature: float, max_tokens: int, think_prefill: str = "") -> str:
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
+    # Prefill an (empty) reasoning block so a "thinking" model continues AFTER it and
+    # skips the expensive reasoning phase — ~20x faster for Qwen3-style local models.
+    if think_prefill.strip():
+        messages.append({"role": "assistant", "content": think_prefill})
     kwargs = dict(
         model=model,
-        messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": user}],
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
     )
@@ -71,12 +77,14 @@ def chat(system: str, user: str, temperature: float = 0.0, max_tokens: int = 409
     because "thinking" models spend ~2000 tokens reasoning BEFORE the answer — too small
     a budget and the query is empty/truncated (all tokens consumed by thinking).
     """
-    global _primary_dead
+    global _primary_dead, _last_used
 
     if not _primary_dead:
         try:
-            return _complete(_primary(), CFG.llm_model, CFG.llm_reasoning_effort,
-                             system, user, temperature, max_tokens)
+            out = _complete(_primary(), CFG.llm_model, CFG.llm_reasoning_effort,
+                            system, user, temperature, max_tokens, CFG.llm_think_prefill)
+            _last_used = f"primary:{CFG.llm_model}"
+            return out
         except Exception as e:
             if not CFG.has_fallback:
                 raise
@@ -87,8 +95,15 @@ def chat(system: str, user: str, temperature: float = 0.0, max_tokens: int = 409
     if not CFG.has_fallback:
         raise RuntimeError("Primary LLM failed and no fallback is configured "
                            "(set GRAPHRAG_LLM_FALLBACK_*).")
-    return _complete(_fallback(), CFG.llm_fallback_model, CFG.llm_fallback_reasoning_effort,
-                     system, user, temperature, max_tokens)
+    out = _complete(_fallback(), CFG.llm_fallback_model, CFG.llm_fallback_reasoning_effort,
+                    system, user, temperature, max_tokens, CFG.llm_fallback_think_prefill)
+    _last_used = f"fallback:{CFG.llm_fallback_model}"
+    return out
+
+
+def last_backend() -> str:
+    """Backend that served the MOST RECENT chat() call (e.g. 'primary:<model>')."""
+    return _last_used
 
 
 def active_backend() -> str:

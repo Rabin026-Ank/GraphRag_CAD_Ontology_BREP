@@ -12,13 +12,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import answer_gen, graphdb_client, nl_to_sparql
+from . import answer_gen, graphdb_client, llm, nl_to_sparql
 from .config import CFG
 
 
 def ask(question: str, model_id: str) -> dict[str, Any]:
     graph_iri = CFG.model_graph_iri(model_id)
     sparql = nl_to_sparql.nl_to_sparql(question, graph_iri)
+    sparql_backend = llm.last_backend()   # which LLM wrote the query
     try:
         results = graphdb_client.run(sparql)
         error = None
@@ -33,10 +34,13 @@ def ask(question: str, model_id: str) -> dict[str, Any]:
             "endpoint rejected it), so no answer could be produced. This is a query-"
             f"generation/execution failure, not evidence that the feature is absent.\n\nError: {error}"
         )
+        answer_backend = sparql_backend
     else:
         answer = answer_gen.generate_answer(question, sparql, results)
+        answer_backend = llm.last_backend()   # which LLM phrased the answer
     return {"question": question, "model_id": model_id,
-            "sparql": sparql, "results": results, "error": error, "answer": answer}
+            "sparql": sparql, "results": results, "error": error, "answer": answer,
+            "sparql_backend": sparql_backend, "answer_backend": answer_backend}
 
 
 if __name__ == "__main__":  # pragma: no cover
@@ -47,7 +51,9 @@ if __name__ == "__main__":  # pragma: no cover
     ap.add_argument("--model-id", required=True)
     args = ap.parse_args()
     out = ask(args.question, args.model_id)
-    print("SPARQL:\n", out["sparql"])
+    print(f"MODEL (query) : {out['sparql_backend']}")
+    print(f"MODEL (answer): {out['answer_backend']}")
+    print("\nSPARQL:\n", out["sparql"])
     if out["error"]:
         print("\nSPARQL ERROR:", out["error"])
     print("\nANSWER:\n", out["answer"])
