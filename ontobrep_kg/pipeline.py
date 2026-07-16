@@ -24,7 +24,17 @@ def ask(question: str, model_id: str) -> dict[str, Any]:
         error = None
     except Exception as e:  # syntax / execution failure
         results, error = {"results": {"bindings": []}}, str(e)
-    answer = answer_gen.generate_answer(question, sparql, results)
+
+    if error is not None:
+        # The query FAILED to execute — do NOT ask the LLM to "interpret" an empty
+        # result, or it will wrongly report "no holes found". Report the failure.
+        answer = (
+            "The query could not be executed (it likely contains a syntax error or the "
+            "endpoint rejected it), so no answer could be produced. This is a query-"
+            f"generation/execution failure, not evidence that the feature is absent.\n\nError: {error}"
+        )
+    else:
+        answer = answer_gen.generate_answer(question, sparql, results)
     return {"question": question, "model_id": model_id,
             "sparql": sparql, "results": results, "error": error, "answer": answer}
 

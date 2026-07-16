@@ -35,14 +35,19 @@ def load_ttl(ttl_path: str, graph_iri: str) -> None:
 
 
 def run(sparql: str) -> dict[str, Any]:
-    """Run a SPARQL SELECT/ASK, return SPARQL-JSON results (dict)."""
+    """Run a SPARQL SELECT/ASK, return SPARQL-JSON results (dict).
+
+    On an HTTP error, include GraphDB's response body (which contains the actual
+    parse/syntax message) so failures are debuggable instead of a bare status code.
+    """
     r = requests.post(
         CFG.graphdb_sparql_url,
         data={"query": sparql},
         headers={"Accept": "application/sparql-results+json"},
         timeout=60,
     )
-    r.raise_for_status()
+    if not r.ok:
+        raise RuntimeError(f"GraphDB {r.status_code} error: {r.text.strip()[:500]}")
     return r.json()
 
 

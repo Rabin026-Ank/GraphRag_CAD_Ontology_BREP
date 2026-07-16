@@ -30,12 +30,27 @@ def _require(name: str) -> str:
 @dataclass(frozen=True)
 class Config:
     # LLM (OpenAI-compatible)
+    # Primary LLM (preferred — e.g. the local vLLM server)
     llm_base_url: str
     llm_api_key: str
     llm_model: str
+    # Reasoning/thinking effort for "thinking" models (e.g. Gemini 2.5, o-series).
+    # Set to "none" to disable thinking so it doesn't consume the output budget and
+    # truncate the SPARQL. Empty = don't send the param (plain vLLM rejects it).
+    llm_reasoning_effort: str
+    # Optional fallback LLM (used ONLY when the primary is unreachable — e.g. free
+    # Gemini when the local server is down). Empty base_url = no fallback.
+    llm_fallback_base_url: str
+    llm_fallback_api_key: str
+    llm_fallback_model: str
+    llm_fallback_reasoning_effort: str
     # GraphDB
     graphdb_url: str
     graphdb_repo: str
+
+    @property
+    def has_fallback(self) -> bool:
+        return bool(self.llm_fallback_base_url.strip())
 
     @property
     def graphdb_sparql_url(self) -> str:
@@ -55,6 +70,11 @@ def load_config() -> "Config":
         llm_base_url=_require("GRAPHRAG_LLM_BASE_URL"),
         llm_api_key=_require("GRAPHRAG_LLM_API_KEY"),
         llm_model=_require("GRAPHRAG_LLM_MODEL"),
+        llm_reasoning_effort=os.environ.get("GRAPHRAG_LLM_REASONING_EFFORT", ""),
+        llm_fallback_base_url=os.environ.get("GRAPHRAG_LLM_FALLBACK_BASE_URL", ""),
+        llm_fallback_api_key=os.environ.get("GRAPHRAG_LLM_FALLBACK_API_KEY", ""),
+        llm_fallback_model=os.environ.get("GRAPHRAG_LLM_FALLBACK_MODEL", ""),
+        llm_fallback_reasoning_effort=os.environ.get("GRAPHRAG_LLM_FALLBACK_REASONING_EFFORT", ""),
         graphdb_url=os.environ.get("GRAPHRAG_GRAPHDB_URL", "http://localhost:7200"),
         graphdb_repo=os.environ.get("GRAPHRAG_GRAPHDB_REPO", "graphrag"),
     )
